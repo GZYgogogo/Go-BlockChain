@@ -1,0 +1,6 @@
+build:
+	go build -o ./scr/projectx
+run:
+	./scr/projectx.exe
+test:
+	go test -v ./...
