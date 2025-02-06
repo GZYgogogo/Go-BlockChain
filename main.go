@@ -32,14 +32,13 @@ func main() {
 		}
 	}()
 
-	//TODO: late server can not synchronous with nodes that before it start
-	go func() {
-		time.Sleep(8 * time.Second)
-		trLate := network.NewLocalTransport("Late_Remote")
-		trRemoteA.Connect(trLate)
-		lateServer := makeServer("LATE_REMOTE", trLate, nil)
-		go lateServer.Start()
-	}()
+	// go func() {
+	// 	time.Sleep(8 * time.Second)
+	// 	trLate := network.NewLocalTransport("Late_Remote")
+	// 	trRemoteA.Connect(trLate)
+	// 	lateServer := makeServer("LATE_REMOTE", trLate, nil)
+	// 	go lateServer.Start()
+	// }()
 
 	initRemoteServer([]network.Transport{trRemoteA, trRemoteB, trRemoteC})
 	privKey := crypto.GeneratePrivateKey()
@@ -71,8 +70,7 @@ func makeServer(id string, tr network.Transport, privKey *crypto.PrivateKey) *ne
 func sendTransaction(tr network.Transport, to network.NetAddr) error {
 	privKey := crypto.GeneratePrivateKey()
 	// data := []byte(strconv.FormatInt(int64(rand.Intn(1000)), 10))
-	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
-	tx := core.NewTransaction(data)
+	tx := core.NewTransaction(contract())
 	tx.Sign(privKey)
 	buf := &bytes.Buffer{}
 	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
@@ -80,4 +78,10 @@ func sendTransaction(tr network.Transport, to network.NetAddr) error {
 	}
 	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
 	return tr.SendMessage(to, msg.Bytes())
+}
+
+func contract() []byte {
+	data := []byte{0x03, 0x0a, 0x02, 0x0a, 0x0b, 0x4f, 0x0c, 0x4f, 0x0c, 0x46, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+	pushFoo := []byte{0x4f, 0x0c, 0x4f, 0x0c, 0x46, 0x0c, 0x03, 0x0a, 0x0d, 0xae}
+	return append(data, pushFoo...)
 }

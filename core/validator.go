@@ -28,7 +28,7 @@ func (v *BlockValidator) Validate(b *Block) error {
 		return err
 	}
 	prevHash := BlockHasher{}.Hash(prevHeader)
-	if prevHash != b.PreBlockHash {
+	if prevHash != b.PrevBlockHash {
 		return fmt.Errorf("the hash of previous block (%d) is invalid", b.Height)
 	}
 	if err := b.Verify(); err != nil {
