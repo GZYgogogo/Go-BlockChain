@@ -11,12 +11,12 @@ import (
 )
 
 type Header struct {
-	Version      uint32     // 版本号
-	DataHash     types.Hash // 数据hash，交易的root hash
-	PreBlockHash types.Hash // 前一个区块的hash
-	Timestamp    int64      // 时间戳
-	Height       uint32
-	Nonce        uint64 // 随机数
+	Version       uint32     // 版本号
+	DataHash      types.Hash // 数据hash，交易的root hash
+	PrevBlockHash types.Hash // 前一个区块的hash
+	Timestamp     int64      // 时间戳
+	Height        uint32
+	Nonce         uint64 // 随机数
 }
 
 func (h *Header) Bytes() []byte {
@@ -46,16 +46,16 @@ func NewBlock(h *Header, txx []*Transaction) (*Block, error) {
 }
 
 func NewBlockFromPrevHeader(prevHeader *Header, txx []*Transaction) (*Block, error) {
-	dataHash, err := CalulateDataHash(txx)
+	dataHash, err := CalculateDataHash(txx)
 	if err != nil {
 		return nil, err
 	}
 	header := &Header{
-		Version:      prevHeader.Version + 1,
-		DataHash:     dataHash,
-		PreBlockHash: BlockHasher{}.Hash(prevHeader),
-		Timestamp:    time.Now().Unix(),
-		Height:       prevHeader.Height + 1,
+		Version:       prevHeader.Version + 1,
+		DataHash:      dataHash,
+		PrevBlockHash: BlockHasher{}.Hash(prevHeader),
+		Timestamp:     time.Now().Unix(),
+		Height:        prevHeader.Height + 1,
 	}
 	return NewBlock(header, txx)
 }
@@ -93,7 +93,7 @@ func (b *Block) Verify() error {
 			return err
 		}
 	}
-	dataHash, err := CalulateDataHash(b.Transactions)
+	dataHash, err := CalculateDataHash(b.Transactions)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (b *Block) Encode(enc Encoding[*Block]) error {
 	return enc.Encode(b)
 }
 
-func CalulateDataHash(transactions []*Transaction) (hash types.Hash, err error) {
+func CalculateDataHash(transactions []*Transaction) (hash types.Hash, err error) {
 	buf := &bytes.Buffer{}
 	for _, transaction := range transactions {
 		if err := transaction.Encode(NewGobTxEncoder(buf)); err != nil {

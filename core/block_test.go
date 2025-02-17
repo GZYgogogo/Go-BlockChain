@@ -14,15 +14,15 @@ func randomBlock(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
 	privKey := crypto.GeneratePrivateKey()
 	tx := randomTxWithSignature(t)
 	hearder := &Header{
-		Version:      1,
-		PreBlockHash: prevBlockHash,
-		Timestamp:    time.Now().UnixNano(),
-		Height:       height,
+		Version:       1,
+		PrevBlockHash: prevBlockHash,
+		Timestamp:     time.Now().UnixNano(),
+		Height:        height,
 	}
 	b, err := NewBlock(hearder, []*Transaction{tx})
 	assert.Nil(t, err)
 
-	dataHash, err := CalulateDataHash(b.Transactions)
+	dataHash, err := CalculateDataHash(b.Transactions)
 	assert.Nil(t, err)
 	b.DataHash = dataHash
 	assert.Nil(t, b.Sign(privKey))
