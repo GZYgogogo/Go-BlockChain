@@ -8,6 +8,7 @@ import (
 	"projectx/core"
 	"projectx/crypto"
 	"projectx/types"
+
 	"time"
 
 	"github.com/go-kit/log"
@@ -21,6 +22,7 @@ var defaultBlockTime = time.Second * 5
 
 type ServerOpts struct {
 	ID            string
+	Transport     Transport
 	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
 	RPCProcessor  RPCProcessor
@@ -71,6 +73,15 @@ func NewServer(opts ServerOpts) (*Server, error) {
 	if s.isVaildator {
 		go s.VaildatorLoop()
 	}
+	// tr := s.Transports[0].(*LocalTransport)
+	// fmt.Printf("%+v\n", tr.peers)
+	// for _, tr := range s.Transports {
+	// 	if err := s.sendGetStatusMessage(tr); err != nil {
+	// 		s.Logger.Log("send get satatus error", err)
+	// 	}
+	// }
+
+	s.boostrapNodes()
 	return s, nil
 }
 
@@ -84,15 +95,20 @@ free:
 		select {
 		case rpc := <-s.rpcCh:
 			// handle rpc message
+			// type of msg is *DecodedMessage
 			msg, err := s.RPCDecodeFunc(rpc)
 			if err != nil {
 				s.Logger.Log("error", err)
 			}
 			// process decoded message
 			if err = s.RPCProcessor.ProcessMessage(msg); err != nil {
-				s.Logger.Log("error", err)
+				if err != core.ERrrBlockKnown {
+					s.Logger.Log("error", err)
+				}
+
 			}
 
+		// quit signal
 		case <-s.quitCh:
 			break free
 		}
@@ -115,14 +131,66 @@ func (s *Server) VaildatorLoop() {
 	}
 }
 
-func (s *Server) ProcessMessage(msg *DecodedMessage) error {
+// server connect to all nodes in transports list
+func (s *Server) boostrapNodes() error {
+	for _, tr := range s.Transports {
+		if s.Transport.Addr() != tr.Addr() {
+			if err := s.Transport.Connect(tr); err != nil {
+				s.Logger.Log("error", "couldn't connect to remote", err)
+				return err
+			}
+			// Send the getStatusMessage so we can snyc(if needed)
+			if err := s.sendGetStatusMessage(tr); err != nil { // && tr.CheckConnection(s.Transport.Addr())
+				s.Logger.Log("error", "sendGetStatusMessage", err)
+				return err
+			}
+		}
+	}
+	return nil
+}
 
+// 传输层！！！！
+// Server come true Processor interface
+// 函数的参数是再复制一份数据。参数使用pointer是防止传入的参数数据过大。
+func (s *Server) ProcessMessage(msg *DecodedMessage) error {
+	// fmt.Printf("%s receiving message form %s\n", s.Transport.Addr(), msg.From)
 	switch t := msg.Data.(type) {
 	case *core.Transaction:
 		return s.ProcessTransaction(t)
 	case *core.Block:
 		return s.ProcessBlock(t)
+	case *GetBlockMessage:
+		return s.processGetBlockMessage(msg.From, t)
+	case *StatusMessage:
+		return s.processStatusMessage(msg.From, t)
+	case *GetStatusMessage:
+		return s.processGetStatusMessage(msg.From, t)
+	default:
+		s.Logger.Log("msg", "unknown message type", "type", fmt.Sprintf("%T", t))
 	}
+	return nil
+}
+
+// send status message, if height lower than current height, we need to get block information
+// TODO: Remove the logic from the main function to here
+// Normally Transport which is our own transport should do the trick.
+func (s *Server) sendGetStatusMessage(tr Transport) error {
+	var (
+		getStatusMsg = new(GetStatusMessage)
+		buf          = new(bytes.Buffer)
+	)
+
+	if err := gob.NewEncoder(buf).Encode(getStatusMsg); err != nil {
+		return err
+	}
+	msg := NewMessage(MessageTypeGetStatus, buf.Bytes())
+
+	fmt.Printf("=> %s sending GetStatus message to %s\n", s.Transport.Addr(), tr.Addr())
+	if err := s.Transport.SendMessage(tr.Addr(), msg.Bytes()); err != nil {
+		return err
+	}
+
+	//statusMessage
 	return nil
 }
 
@@ -161,11 +229,55 @@ func (s *Server) ProcessBlock(b *core.Block) error {
 	return nil
 }
 
+func (s *Server) processGetBlockMessage(form NetAddr, data *GetBlockMessage) error {
+	panic("here")
+	fmt.Printf("processGetBlockMessage %+v\n", data)
+	return nil
+}
+
+func (s *Server) processGetStatusMessage(form NetAddr, data *GetStatusMessage) error {
+
+	// !!!!!!!!
+	// BUG: we weil get mesage just  like "REMOTE_1 receiving GetStatus message from REMOTE_1", but the function named SendMessage in localtransport.go cannot send message to ownself.
+	// !!!!!!!!
+	// fmt.Printf("=> %s receiving GetStatus message from %s => %+v\n", s.Transport.Addr(), form, data)
+
+	StatusMessage := &StatusMessage{
+		ID:            s.ID,
+		CurrentHeight: s.blockchain.Height(),
+	}
+	buf := new(bytes.Buffer)
+	if err := gob.NewEncoder(buf).Encode(StatusMessage); err != nil {
+		return err
+	}
+	msg := NewMessage(MessageTypeStatus, buf.Bytes())
+	return s.Transport.SendMessage(form, msg.Bytes())
+}
+
+func (s *Server) processStatusMessage(form NetAddr, data *StatusMessage) error {
+	fmt.Printf("=> %s receiving GetStatus Response message from %s => %+v\n", s.Transport.Addr(), form, data)
+	if s.blockchain.Height() >= data.CurrentHeight {
+		s.Logger.Log("msg", "cannot sync blockHeight to low", "ourHeight", s.blockchain.Height(), "remoteHeight", data.CurrentHeight)
+		return nil
+	}
+
+	//TODO: in this case, we 100% sure that the node has blocks heighter than us
+	fmt.Println(11111111111111)
+	getBlockMessage := &GetBlockMessage{}
+	buf := new(bytes.Buffer)
+	if err := gob.NewEncoder(buf).Encode(getBlockMessage); err != nil {
+		return err
+	}
+	msg := NewMessage(MessageTypeGetBlocks, buf.Bytes())
+	s.Transport.SendMessage(form, msg.Bytes())
+	return nil
+}
+
 func (s *Server) initTransports(transports []Transport) {
 	// rpc form all transports connect to server will consume
 	for _, tr := range transports {
 		go func(tr Transport) {
-			//listen channel
+			//listen channel to receive rpc message
 			for rpc := range tr.Consume() {
 				//将rpc消息全部存放至Server的channel中
 				s.rpcCh <- rpc

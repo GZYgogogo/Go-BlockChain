@@ -40,6 +40,10 @@ func (t *LocalTransport) Addr() NetAddr {
 func (t *LocalTransport) SendMessage(to NetAddr, payload []byte) error {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
+	if t.addr == to {
+		return nil
+	}
+	// check if peer is connected
 	peer, ok := t.peers[to]
 	if !ok {
 		return fmt.Errorf("%s colud not send message to unkonwn peer %s", t.Addr(), to)
@@ -55,4 +59,13 @@ func (t *LocalTransport) Broadcast(payload []byte) error {
 		}
 	}
 	return nil
+}
+
+func (t *LocalTransport) CheckConnection(tr NetAddr) bool {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if _, ok := t.peers[tr]; ok {
+		return true
+	}
+	return false
 }

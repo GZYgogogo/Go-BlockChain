@@ -8,4 +8,5 @@ type Transport interface {
 	SendMessage(NetAddr, []byte) error
 	Addr() NetAddr
 	Broadcast([]byte) error
+	CheckConnection(NetAddr) bool
 }

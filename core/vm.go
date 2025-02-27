@@ -2,10 +2,6 @@ package core
 
 import (
 	"encoding/binary"
-<<<<<<< HEAD
-=======
-	"fmt"
->>>>>>> origin/main
 )
 
 type Instruction byte
@@ -106,8 +102,8 @@ func (vm *VM) Exec(instr Instruction) error {
 			panic("TODO: unkonwn type")
 		}
 
-		fmt.Printf("%+v\n", key)
-		fmt.Printf("%+v\n", value)
+		// fmt.Printf("%+v\n", key)
+		// fmt.Printf("%+v\n", value)
 
 		vm.constractState.Put(key, serializedValue)
 

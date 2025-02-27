@@ -4,47 +4,81 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"net"
 	"projectx/core"
 	"projectx/crypto"
 	"projectx/network"
 	"time"
+)
 
-	"github.com/sirupsen/logrus"
+var (
+	transports = []network.Transport{
+		network.NewLocalTransport("LOCAL"),
+		// network.NewLocalTransport("REMOTE_0"),
+		// network.NewLocalTransport("REMOTE_1"),
+		// network.NewLocalTransport("REMOTE_2"),
+		network.NewLocalTransport("Late_Remote"),
+	}
+	// remoteTransport = transports[1:4]
 )
 
 func main() {
-	trLocal := network.NewLocalTransport("local")
-	trRemoteA := network.NewLocalTransport("remoteA")
-	trRemoteB := network.NewLocalTransport("remoteB")
-	trRemoteC := network.NewLocalTransport("remoteC")
+	tr := network.NewTCPTransport(":3000")
+	go tr.Start()
 
-	trLocal.Connect(trRemoteA)
-	trRemoteA.Connect(trRemoteB)
-	trRemoteB.Connect(trRemoteC)
-	trRemoteA.Connect(trLocal)
+	time.Sleep(1 * time.Second)
+	tcpTester()
 
-	go func() {
-		for {
-			if err := sendTransaction(trRemoteA, trLocal.Addr()); err != nil {
-				logrus.Error(err)
-			}
-			time.Sleep(3 * time.Second)
-		}
-	}()
-
-	// go func() {
-	// 	time.Sleep(8 * time.Second)
-	// 	trLate := network.NewLocalTransport("Late_Remote")
-	// 	trRemoteA.Connect(trLate)
-	// 	lateServer := makeServer("LATE_REMOTE", trLate, nil)
-	// 	go lateServer.Start()
-	// }()
-
-	initRemoteServer([]network.Transport{trRemoteA, trRemoteB, trRemoteC})
-	privKey := crypto.GeneratePrivateKey()
-	s := makeServer("LOCAL", trLocal, &privKey)
-	s.Start()
+	select {}
 }
+
+func tcpTester() {
+	conn, err := net.Dial("tcp", ":3000")
+	if err != nil {
+		panic(err)
+	}
+	conn.Write([]byte("hello world!"))
+}
+
+// func main() {
+// 	trLocal := transports[0]
+// 	// remote_1 := transports[1]
+// 	// remote_2 := transports[2]
+// 	// remote_3 := transports[3]
+// 	trLate := transports[len(transports)-1]
+
+// 	// initRemoteServer(remoteTransport)
+// 	privKey := crypto.GeneratePrivateKey()
+// 	s := makeServer(string(trLocal.Addr()), trLocal, &privKey)
+// 	// go func() {
+// 	// 	for {
+// 	// 		if err := sendTransaction(remote_1, trLocal.Addr()); err != nil {
+// 	// 			logrus.Error(err)
+// 	// 		}
+// 	// 		time.Sleep(3 * time.Second)
+// 	// 	}
+// 	// }()
+
+// 	// sendGetStatusMessage(trRemoteA, "remoteB")
+
+// 	go func() {
+// 		time.Sleep(8 * time.Second)
+// 		lateServer := makeServer(string(trLate.Addr()), trLate, nil)
+// 		go lateServer.Start()
+// 	}()
+// 	s.Start()
+// 	// trLocal := network.NewLocalTransport("local")
+// 	// trRemoteA := network.NewLocalTransport("remoteA")
+// 	// trRemoteB := network.NewLocalTransport("remoteB")
+// 	// trRemoteC := network.NewLocalTransport("remoteC")
+
+// 	// trLocal.Connect(trRemoteA)
+// 	// trRemoteA.Connect(trRemoteB)
+// 	// trRemoteB.Connect(trRemoteA)
+// 	// trRemoteB.Connect(trRemoteC)
+// 	// trRemoteA.Connect(trLocal)
+
+// }
 
 func initRemoteServer(trs []network.Transport) {
 	for i, tr := range trs {
@@ -57,8 +91,9 @@ func initRemoteServer(trs []network.Transport) {
 func makeServer(id string, tr network.Transport, privKey *crypto.PrivateKey) *network.Server {
 	opts := network.ServerOpts{
 		ID:         id,
+		Transport:  tr,
 		PrivateKey: privKey,
-		Transports: []network.Transport{tr},
+		Transports: transports,
 	}
 	s, err := network.NewServer(opts)
 	if err != nil {
@@ -66,6 +101,21 @@ func makeServer(id string, tr network.Transport, privKey *crypto.PrivateKey) *ne
 	}
 	return s
 }
+
+// send status message, if height lower than current height, we need to get block information
+// func sendGetStatusMessage(tr network.Transport, to network.NetAddr) error {
+// 	var (
+// 		getStatusMsg = new(network.GetStatusMessage)
+// 		buf          = new(bytes.Buffer)
+// 	)
+
+// 	if err := gob.NewEncoder(buf).Encode(getStatusMsg); err != nil {
+// 		return err
+// 	}
+// 	msg := network.NewMessage(network.MessageTypeGetStatus, buf.Bytes())
+
+// 	return tr.SendMessage(to, msg.Bytes())
+// }
 
 func sendTransaction(tr network.Transport, to network.NetAddr) error {
 	privKey := crypto.GeneratePrivateKey()
