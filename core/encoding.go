@@ -23,8 +23,8 @@ func NewGobTxEncoder(w io.Writer) *GobTxEncoder {
 	return &GobTxEncoder{w: w}
 }
 
-func (e *GobTxEncoder) Encode(tx *Transaction) error {
-	return gob.NewEncoder(e.w).Encode(tx)
+func (en *GobTxEncoder) Encode(tx *Transaction) error {
+	return gob.NewEncoder(en.w).Encode(tx)
 }
 
 type GobTxDecoder struct {
@@ -36,8 +36,8 @@ func NewGobTxDecoder(r io.Reader) *GobTxDecoder {
 	return &GobTxDecoder{r: r}
 }
 
-func (e *GobTxDecoder) Decode(tx *Transaction) error {
-	return gob.NewDecoder(e.r).Decode(tx)
+func (de *GobTxDecoder) Decode(tx *Transaction) error {
+	return gob.NewDecoder(de.r).Decode(tx)
 }
 
 type GobBlockEncoder struct {
@@ -48,8 +48,8 @@ func NewGobBlockEncoder(w io.Writer) *GobBlockEncoder {
 	return &GobBlockEncoder{w: w}
 }
 
-func (e *GobBlockEncoder) Encode(block *Block) error {
-	return gob.NewEncoder(e.w).Encode(block)
+func (en *GobBlockEncoder) Encode(block *Block) error {
+	return gob.NewEncoder(en.w).Encode(block)
 }
 
 type GobBlockDecoder struct {
@@ -60,6 +60,6 @@ func NewGobBlockDecoder(r io.Reader) *GobBlockDecoder {
 	return &GobBlockDecoder{r: r}
 }
 
-func (e *GobBlockDecoder) Decode(block *Block) error {
-	return gob.NewDecoder(e.r).Decode(block)
+func (de *GobBlockDecoder) Decode(block *Block) error {
+	return gob.NewDecoder(de.r).Decode(block)
 }

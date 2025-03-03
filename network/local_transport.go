@@ -1,23 +1,23 @@
 package network
 
 import (
-	"bytes"
 	"fmt"
+	"net"
 	"sync"
 )
 
 type LocalTransport struct {
-	addr      NetAddr
+	addr      net.Addr
 	consumeCh chan RPC
 	lock      sync.RWMutex
-	peers     map[NetAddr]*LocalTransport
+	peers     map[net.Addr]*LocalTransport
 }
 
-func NewLocalTransport(addr NetAddr) Transport {
+func NewLocalTransport(addr net.Addr) *LocalTransport {
 	return &LocalTransport{
 		addr:      addr,
 		consumeCh: make(chan RPC, 1024),
-		peers:     make(map[NetAddr]*LocalTransport),
+		peers:     make(map[net.Addr]*LocalTransport),
 	}
 }
 
@@ -26,29 +26,30 @@ func (t *LocalTransport) Consume() <-chan RPC {
 }
 
 func (t *LocalTransport) Connect(tr Transport) error {
+	trans := tr.(*LocalTransport)
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.peers[tr.Addr()] = tr.(*LocalTransport)
+	t.peers[tr.Addr()] = trans
 	return nil
 }
 
-func (t *LocalTransport) Addr() NetAddr {
+func (t *LocalTransport) Addr() net.Addr {
 	return t.addr
 }
 
-func (t *LocalTransport) SendMessage(to NetAddr, payload []byte) error {
+func (t *LocalTransport) SendMessage(to net.Addr, payload []byte) error {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if t.addr == to {
 		return nil
 	}
 	// check if peer is connected
-	peer, ok := t.peers[to]
+	_, ok := t.peers[to]
 	if !ok {
 		return fmt.Errorf("%s colud not send message to unkonwn peer %s", t.Addr(), to)
 	}
-	peer.consumeCh <- RPC{From: t.addr, Proload: bytes.NewReader(payload)}
+	// peer.consumeCh <- RPC{From: t.addr, Proload: bytes.NewReader(payload)}
 	return nil
 }
 
@@ -61,11 +62,11 @@ func (t *LocalTransport) Broadcast(payload []byte) error {
 	return nil
 }
 
-func (t *LocalTransport) CheckConnection(tr NetAddr) bool {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	if _, ok := t.peers[tr]; ok {
-		return true
-	}
-	return false
-}
+// func (t *LocalTransport) CheckConnection(tr NetAddr) bool {
+// 	t.lock.RLock()
+// 	defer t.lock.RUnlock()
+// 	if _, ok := t.peers[tr]; ok {
+// 		return true
+// 	}
+// 	return false
+// }

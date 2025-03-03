@@ -12,7 +12,7 @@ import (
 
 type Header struct {
 	Version       uint32     // 版本号
-	DataHash      types.Hash // 数据hash，交易的root hash
+	DataHash      types.Hash // 交易的root hash of merkel tree
 	PrevBlockHash types.Hash // 前一个区块的hash
 	Timestamp     int64      // 时间戳
 	Height        uint32

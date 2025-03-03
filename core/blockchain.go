@@ -11,6 +11,7 @@ type Blockchain struct {
 	logger    log.Logger
 	lock      sync.RWMutex
 	headers   []*Header
+	blocks    []*Block
 	store     Storage
 	validator Validator
 	// TODO: make this an interface
@@ -35,6 +36,7 @@ func (bc *Blockchain) SetVaildator(v Validator) {
 	bc.validator = v
 }
 
+// execute contract when packea a new block
 func (bc *Blockchain) AddBlock(block *Block) error {
 	//validate block
 	if err := bc.validator.Validate(block); err != nil {
@@ -62,6 +64,15 @@ func (bc *Blockchain) GetHeader(height uint32) (*Header, error) {
 	return bc.headers[height], nil
 }
 
+func (bc *Blockchain) GetBlock(height uint32) (*Block, error) {
+	if height > bc.Height() {
+		return nil, fmt.Errorf("given heighth (%d) too height", height)
+	}
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+	return bc.blocks[height], nil
+}
+
 // 判断是否有某个height的区块
 func (bc *Blockchain) HasBlock(height uint32) bool {
 	return height <= bc.Height()
@@ -79,6 +90,7 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.lock.RLock()
 	defer bc.lock.RUnlock()
 	bc.headers = append(bc.headers, b.Header)
+	bc.blocks = append(bc.blocks, b)
 
 	bc.logger.Log(
 		"msg", "new block",

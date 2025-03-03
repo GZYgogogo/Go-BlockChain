@@ -11,7 +11,7 @@ type Transaction struct {
 	Data      []byte
 	From      crypto.PublicKey
 	Signature *crypto.Signature
-	//cached version of the trancation data hashS
+	//cached version of the trancation data hash
 	hash types.Hash
 	// firstSceen is the timestamp of when the trancation is first seen locally
 	firstSceen int64

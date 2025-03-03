@@ -3,7 +3,7 @@ package core
 import "fmt"
 
 type State struct {
-	data map[string][]byte
+	data map[string][]byte //  store key-value which are getted from executing contract
 }
 
 func NewState() *State {

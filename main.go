@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"net"
 	"projectx/core"
@@ -11,25 +10,53 @@ import (
 	"time"
 )
 
-var (
-	transports = []network.Transport{
-		network.NewLocalTransport("LOCAL"),
-		// network.NewLocalTransport("REMOTE_0"),
-		// network.NewLocalTransport("REMOTE_1"),
-		// network.NewLocalTransport("REMOTE_2"),
-		network.NewLocalTransport("Late_Remote"),
-	}
-	// remoteTransport = transports[1:4]
-)
+// var (
+// 	transports = []network.Transport{
+// 		// network.NewLocalTransport("LOCAL"),
+// 		// network.NewLocalTransport("REMOTE_0"),
+// 		// network.NewLocalTransport("REMOTE_1"),
+// 		// network.NewLocalTransport("REMOTE_2"),
+// 		// network.NewLocalTransport("Late_Remote"),
+// 	}
+// 	// remoteTransport = transports[1:4]
+// )
 
+// BUG!
+// we will get error about read error, when we run code more than 20 seconds.
+// BUG!
 func main() {
-	tr := network.NewTCPTransport(":3000")
-	go tr.Start()
+	priv := crypto.GeneratePrivateKey()
 
+	localNode := makeServer("LOCAL_NDOE", &priv, ":3000", []string{":4000"})
+
+	go localNode.Start()
+
+	remoteNodeA := makeServer("REMOTE_NODE_A", nil, ":4000", []string{":3000"})
+	go remoteNodeA.Start()
+
+	// remoteNodeB := makeServer("REMOTE_NODE_B", nil, ":5000", []string{})
+	// go remoteNodeB.Start()
 	time.Sleep(1 * time.Second)
-	tcpTester()
+	go tcpTester()
+
+	time.Sleep(7 * time.Second)
+	lateNode := makeServer("LATE_NODE", nil, ":5000", []string{":3000"})
+	go lateNode.Start()
 
 	select {}
+}
+func makeServer(id string, privKey *crypto.PrivateKey, address string, seedNodess []string) *network.Server {
+	opts := network.ServerOpts{
+		ListenAddr: address,
+		ID:         id,
+		PrivateKey: privKey,
+		SeedNodes:  seedNodess,
+	}
+	s, err := network.NewServer(opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return s
 }
 
 func tcpTester() {
@@ -37,7 +64,21 @@ func tcpTester() {
 	if err != nil {
 		panic(err)
 	}
-	conn.Write([]byte("hello world!"))
+
+	privKey := crypto.GeneratePrivateKey()
+	// data := []byte(strconv.FormatInt(int64(rand.Intn(1000)), 10))
+	tx := core.NewTransaction(contract())
+	tx.Sign(privKey)
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		panic(err)
+	}
+
+	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
+	_, err = conn.Write(msg.Bytes())
+	if err != nil {
+		panic(err)
+	}
 }
 
 // func main() {
@@ -80,27 +121,13 @@ func tcpTester() {
 
 // }
 
-func initRemoteServer(trs []network.Transport) {
-	for i, tr := range trs {
-		id := fmt.Sprintf("REMOTE_%d", i)
-		s := makeServer(id, tr, nil)
-		go s.Start()
-	}
-}
-
-func makeServer(id string, tr network.Transport, privKey *crypto.PrivateKey) *network.Server {
-	opts := network.ServerOpts{
-		ID:         id,
-		Transport:  tr,
-		PrivateKey: privKey,
-		Transports: transports,
-	}
-	s, err := network.NewServer(opts)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return s
-}
+// func initRemoteServer(trs []network.Transport) {
+// 	for i, tr := range trs {
+// 		id := fmt.Sprintf("REMOTE_%d", i)
+// 		s := makeServer(id, tr, nil)
+// 		go s.Start()
+// 	}
+// }
 
 // send status message, if height lower than current height, we need to get block information
 // func sendGetStatusMessage(tr network.Transport, to network.NetAddr) error {
@@ -117,7 +144,7 @@ func makeServer(id string, tr network.Transport, privKey *crypto.PrivateKey) *ne
 // 	return tr.SendMessage(to, msg.Bytes())
 // }
 
-func sendTransaction(tr network.Transport, to network.NetAddr) error {
+func sendTransaction(tr network.Transport, to net.Addr) error {
 	privKey := crypto.GeneratePrivateKey()
 	// data := []byte(strconv.FormatInt(int64(rand.Intn(1000)), 10))
 	tx := core.NewTransaction(contract())

@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"net"
 	"projectx/core"
 
 	"github.com/sirupsen/logrus"
@@ -20,10 +21,11 @@ const (
 	MessageTypeGetBlocks MessageType = 0x3
 	MessageTypeStatus    MessageType = 0x4
 	MessageTypeGetStatus MessageType = 0x5
+	MessageTypeBlocks    MessageType = 0x6
 )
 
 type RPC struct {
-	From    NetAddr
+	From    net.Addr
 	Proload io.Reader
 }
 
@@ -46,7 +48,7 @@ func (msg *Message) Bytes() []byte {
 }
 
 type DecodedMessage struct {
-	From NetAddr
+	From net.Addr
 	Data any
 }
 
@@ -106,6 +108,15 @@ func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMessage, error) {
 		return &DecodedMessage{
 			From: rpc.From,
 			Data: &GetStatusMessage{},
+		}, nil
+	case MessageTypeBlocks:
+		blocksMessage := new(BlocksMessage)
+		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(blocksMessage); err != nil {
+			return nil, err
+		}
+		return &DecodedMessage{
+			From: rpc.From,
+			Data: blocksMessage,
 		}, nil
 	default:
 		return nil, fmt.Errorf("invaild message header: %x", msg.Header)

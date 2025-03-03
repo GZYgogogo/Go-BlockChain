@@ -1,6 +1,15 @@
 package network
 
-type GetBlockMessage struct{}
+import "projectx/core"
+
+type GetBlockMessage struct {
+	From uint32
+	To   uint32 //if To is 0, the maximum blocks will be returned
+}
+
+type BlocksMessage struct {
+	Blocks []*core.Block
+}
 
 type GetStatusMessage struct{}
 
