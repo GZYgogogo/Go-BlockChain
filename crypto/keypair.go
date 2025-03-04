@@ -1,11 +1,13 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"projectx/types"
 )
@@ -75,6 +77,17 @@ func (k PublicKey) Address() types.Address {
 
 type Signature struct {
 	S, R *big.Int
+}
+
+func (s Signature) String() string {
+	fmt.Printf("Signature: %x %x\n", s.R, s.S)
+	// it is more simple to use it
+	// return fmt.Sprintf("%x %x", s.R, s.S)
+	buf := new(bytes.Buffer)
+	buf.Write(s.R.Bytes())
+	buf.Write(s.S.Bytes())
+	// fmt.Println("buf len:", buf.Len())
+	return hex.EncodeToString(buf.Bytes())
 }
 
 // func (s Signature) Verify(pubKey PublicKey, data []byte) bool {

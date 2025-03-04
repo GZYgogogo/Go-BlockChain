@@ -27,30 +27,33 @@ import (
 func main() {
 	priv := crypto.GeneratePrivateKey()
 
-	localNode := makeServer("LOCAL_NDOE", &priv, ":3000", []string{":4000"})
+	localNode := makeServer("LOCAL_NDOE", &priv, ":3000", []string{":4000"}, ":9000")
 
 	go localNode.Start()
 
-	remoteNodeA := makeServer("REMOTE_NODE_A", nil, ":4000", []string{":3000"})
+	remoteNodeA := makeServer("REMOTE_NODE_A", nil, ":4000", []string{":3000"}, "")
 	go remoteNodeA.Start()
 
 	// remoteNodeB := makeServer("REMOTE_NODE_B", nil, ":5000", []string{})
 	// go remoteNodeB.Start()
+	// time.Sleep(1 * time.Second)
+	// tcpTester() //时间到了会导致:3000无法连接到该端
 	time.Sleep(1 * time.Second)
-	go tcpTester()
+	tcpSender()
 
-	time.Sleep(7 * time.Second)
-	lateNode := makeServer("LATE_NODE", nil, ":5000", []string{":3000"})
+	time.Sleep(20 * time.Second)
+	lateNode := makeServer("LATE_NODE", nil, ":5000", []string{":3000"}, "")
 	go lateNode.Start()
 
 	select {}
 }
-func makeServer(id string, privKey *crypto.PrivateKey, address string, seedNodess []string) *network.Server {
+func makeServer(id string, privKey *crypto.PrivateKey, address string, seedNodess []string, JSONAddr string) *network.Server {
 	opts := network.ServerOpts{
-		ListenAddr: address,
-		ID:         id,
-		PrivateKey: privKey,
-		SeedNodes:  seedNodess,
+		APIListenAddr: JSONAddr,
+		ListenAddr:    address,
+		ID:            id,
+		PrivateKey:    privKey,
+		SeedNodes:     seedNodess,
 	}
 	s, err := network.NewServer(opts)
 	if err != nil {
@@ -59,12 +62,37 @@ func makeServer(id string, privKey *crypto.PrivateKey, address string, seedNodes
 	return s
 }
 
+// this connection will close after send message that makes read buf overflow.
+// net.Dial 创建的连接在 Write 方法执行完后会因为发送操作完成而关闭。这种行为并不是显式地调用 conn.Close()，而是由于 TCP 协议的特性，连接在发送完数据并写入成功后会自然关闭。
 func tcpTester() {
 	conn, err := net.Dial("tcp", ":3000")
 	if err != nil {
 		panic(err)
 	}
+	// fmt.Printf("222222 %+v -> %+v\n", conn.LocalAddr(), conn.RemoteAddr())
+	privKey := crypto.GeneratePrivateKey()
+	// data := []byte(strconv.FormatInt(int64(rand.Intn(1000)), 10))
+	tx := core.NewTransaction(contract())
+	tx.Sign(privKey)
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		panic(err)
+	}
 
+	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
+	_, err = conn.Write(msg.Bytes())
+	if err != nil {
+		panic(err)
+	}
+}
+
+// net.Dial 创建的连接在 Write 方法执行完后会因为发送操作完成而关闭。这种行为并不是显式地调用 conn.Close()，而是由于 TCP 协议的特性，连接在发送完数据并写入成功后会自然关闭。
+func tcpSender() {
+	conn, err := net.Dial("tcp", ":3000")
+	if err != nil {
+		panic(err)
+	}
+	// fmt.Printf("222222 %+v -> %+v\n", conn.LocalAddr(), conn.RemoteAddr())
 	privKey := crypto.GeneratePrivateKey()
 	// data := []byte(strconv.FormatInt(int64(rand.Intn(1000)), 10))
 	tx := core.NewTransaction(contract())

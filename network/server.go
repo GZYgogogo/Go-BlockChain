@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+
+	"projectx/api"
 	"projectx/core"
 	"projectx/crypto"
 	"projectx/types"
@@ -25,6 +27,7 @@ var defaultBlockTime = time.Second * 5
 type ServerOpts struct {
 	ID            string
 	ListenAddr    string
+	APIListenAddr string
 	SeedNodes     []string
 	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
@@ -64,6 +67,16 @@ func NewServer(opts ServerOpts) (*Server, error) {
 	blockchain, err := core.NewBlockchain(opts.Logger, genesisBlock())
 	if err != nil {
 		return nil, err
+	}
+
+	if len(opts.APIListenAddr) > 0 {
+		apiServerCfg := api.ServerConfig{
+			ListenAddr: opts.APIListenAddr,
+			Logger:     opts.Logger,
+		}
+		apiServer := api.NewServer(apiServerCfg, blockchain)
+		go apiServer.Start()
+		opts.Logger.Log("msg", "JSON API server runnning", "port", opts.APIListenAddr)
 	}
 
 	peerCh := make(chan *TCPPeer)
@@ -289,26 +302,32 @@ func (s *Server) ProcessBlock(b *core.Block) error {
 }
 
 func (s *Server) processBlocksMessage(from net.Addr, data *BlocksMessage) error {
+	// if node can not add blocks that get from other node, node still can not receive new block that broadcast by other node.
+	// TODO: So we should get blocks from other node again.
+
 	fmt.Printf("receive blocks message!!!!!!!!!!!!!!! from %+v\n", from)
 
 	for _, block := range data.Blocks {
-		fmt.Printf("BLOCK=>%+v", block)
 		if err := s.blockchain.AddBlock(block); err != nil {
-			fmt.Println("222222222222", err) //TODO:fix it
 			return err
 		}
 	}
-	fmt.Printf("BLOCKS=>+%v\n", s.blockchain)
+	// fmt.Printf("BLOCKS=>+%v\n", s.blockchain)
 	return nil
 }
 
 func (s *Server) processGetBlockMessage(from net.Addr, data *GetBlockMessage) error {
 	fmt.Printf("get block message from %+v => %+v\n", from, data)
-	blocks := []*core.Block{}
+	var (
+		blocks    = []*core.Block{}
+		ourHeight = s.blockchain.Height()
+	)
 	if data.To == 0 {
 		// i := 1，because we already have genesis block.
-		for i := 1; i <= int(s.blockchain.Height()); i++ {
+		fmt.Printf("data.From:%+v, s.blockchain.Height():%+v\n", data.From, s.blockchain.Height())
+		for i := int(data.From); i <= int(ourHeight); i++ {
 			block, err := s.blockchain.GetBlock(uint32(i))
+			fmt.Printf("get block %+v\n", block)
 			if err != nil {
 				return err
 			}
@@ -371,10 +390,11 @@ func (s *Server) processStatusMessage(from net.Addr, data *StatusMessage) error 
 	}
 
 	//TODO: in this case, we 100% sure that the node has blocks heighter than us
-
+	ourHeight := s.blockchain.Height()
 	getBlockMessage := &GetBlockMessage{
-		From: data.CurrentHeight,
-		To:   s.blockchain.Height(),
+		From: ourHeight + 1,
+		// To:   s.blockchain.Height(),
+		To: 0,
 	}
 	buf := new(bytes.Buffer)
 	if err := gob.NewEncoder(buf).Encode(getBlockMessage); err != nil {
@@ -470,5 +490,7 @@ func genesisBlock() *core.Block {
 		Height:    0,
 	}
 	block, _ := core.NewBlock(header, nil)
+	priv := crypto.GeneratePrivateKey()
+	block.Sign(priv)
 	return block
 }
